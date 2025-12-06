@@ -5,7 +5,6 @@ import { CATEGORIAS } from '../utils/constants';
 
 /**
  * Hook personalizado para gestión de socios
- * Principio: Interface Segregation - Interfaz específica para socios
  */
 export const useSocios = () => {
   const [socios, setSocios] = useState([]);
@@ -14,9 +13,12 @@ export const useSocios = () => {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(getEmptyForm());
 
+  // 🔍 Nuevo: estado de búsqueda
+  const [search, setSearch] = useState("");
+
   useEffect(() => {
-    loadSocios();
-  }, []);
+    loadSocios(search);
+  }, [search]); // 🔍 Se actualiza la lista cuando cambia el texto
 
   function getEmptyForm() {
     return {
@@ -26,14 +28,14 @@ export const useSocios = () => {
       numeroSocio: '',
       fechaVencimiento: '',
       categoria: CATEGORIAS.TITULAR,
-      password: ''
+      password: '1234'
     };
   }
 
-  const loadSocios = async () => {
+  const loadSocios = async (searchTerm = "") => {
     setLoading(true);
     try {
-      const result = await SocioController.loadAllSocios();
+      const result = await SocioController.loadAllSocios(searchTerm);
       if (result.success) {
         setSocios(result.data);
       }
@@ -54,7 +56,7 @@ export const useSocios = () => {
       if (result.success) {
         alert(result.mensaje || 'Operación exitosa');
         resetForm();
-        await loadSocios();
+        await loadSocios(search);
       } else {
         alert(result.error || 'Error en la operación');
       }
@@ -71,7 +73,7 @@ export const useSocios = () => {
       const result = await SocioController.deleteSocio(id);
       if (result.success) {
         alert('Socio eliminado correctamente');
-        await loadSocios();
+        await loadSocios(search);
       } else {
         alert('Error al eliminar el socio');
       }
@@ -111,6 +113,10 @@ export const useSocios = () => {
     saveSocio,
     deleteSocio,
     editSocio,
-    resetForm
+    resetForm,
+
+    // 🔍 Nuevo: exportamos búsqueda
+    search,
+    setSearch
   };
 };

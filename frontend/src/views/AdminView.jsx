@@ -5,9 +5,6 @@ import Header from '../components/Header';
 import SocioForm from '../components/SocioForm';
 import { useSocios } from '../hooks/useSocios';
 
-/**
- * Vista del Panel de Administración
- */
 const AdminView = ({ onLogout }) => {
   const {
     socios,
@@ -20,7 +17,11 @@ const AdminView = ({ onLogout }) => {
     saveSocio,
     deleteSocio,
     editSocio,
-    resetForm
+    resetForm,
+
+    // 🔍 agregados
+    search,
+    setSearch
   } = useSocios();
 
   return (
@@ -34,7 +35,10 @@ const AdminView = ({ onLogout }) => {
       />
 
       <div className="max-w-6xl mx-auto p-4">
-        <div className="mb-4">
+
+        {/* Botón Nuevo Socio */}
+        <div className="mb-4 flex justify-between items-center">
+
           <button
             onClick={() => {
               resetForm();
@@ -45,8 +49,18 @@ const AdminView = ({ onLogout }) => {
             <Plus className="w-5 h-5" />
             <span>Nuevo Socio</span>
           </button>
+
+          {/* 🔍 Campo de búsqueda */}
+          <input
+            type="text"
+            placeholder="Buscar por DNI, nombre, apellido, número..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="px-4 py-2 border rounded-lg shadow-sm w-72 focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
+        {/* Formulario */}
         {showForm && (
           <SocioForm
             formData={formData}
@@ -58,6 +72,7 @@ const AdminView = ({ onLogout }) => {
           />
         )}
 
+        {/* Tabla */}
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <div className="p-4 bg-blue-900 text-white font-bold">
             Lista de Socios ({socios.length})
@@ -89,7 +104,9 @@ const AdminView = ({ onLogout }) => {
                       <td className="px-4 py-4 text-sm text-gray-900">{socio.numeroSocio}</td>
                       <td className="px-4 py-4 text-sm text-gray-900">{socio.getFechaFormateada()}</td>
                       <td className="px-4 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${socio.isVigente ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          socio.isVigente ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
                           {socio.getEstado()}
                         </span>
                       </td>

@@ -296,12 +296,33 @@ const esAdmin = (req, res, next) => {
   next();
 };
 
-// Listar todos los socios
+// Listar todos los socios (con filtro opcional)
 app.get('/api/admin/socios', auth, esAdmin, async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria, foto_url FROM socios ORDER BY apellido, nombre'
-    );
+    const { search } = req.query; // <-- parámetro de búsqueda
+
+    let query = `
+      SELECT id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria, foto_url 
+      FROM socios
+    `;
+    
+    let params = [];
+
+    if (search && search.trim() !== "") {
+      query += `
+        WHERE 
+          dni ILIKE $1 OR
+          nombre ILIKE $1 OR
+          apellido ILIKE $1 OR
+          numero_socio::text ILIKE $1 OR
+          categoria ILIKE $1
+      `;
+      params.push(`%${search}%`);
+    }
+
+    query += " ORDER BY apellido, nombre";
+
+    const result = await pool.query(query, params);
     
     const socios = result.rows.map(s => ({
       ...s,
@@ -314,6 +335,7 @@ app.get('/api/admin/socios', auth, esAdmin, async (req, res) => {
     res.status(500).json({ error: 'Error en el servidor' });
   }
 });
+
 
 // Crear nuevo socio
 app.post('/api/admin/socios', auth, esAdmin, async (req, res) => {

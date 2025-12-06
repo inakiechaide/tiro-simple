@@ -35,19 +35,25 @@ class SocioService {
     return { success: false, error: 'Error al verificar' };
   }
 
-  async getAllSocios() {
-    const token = await StorageService.getAuthToken();
-    const response = await ApiService.get('/admin/socios', token);
-    
-    if (response.ok) {
-      return {
-        success: true,
-        data: response.data.map(s => Socio.fromApiResponse(s))
-      };
-    }
-    
-    return { success: false, error: 'Error al cargar socios' };
+ async getAllSocios(search = "") {
+  const token = await StorageService.getAuthToken();
+
+  const endpoint = search
+    ? `/admin/socios?search=${encodeURIComponent(search)}`
+    : `/admin/socios`;
+
+  const response = await ApiService.get(endpoint, token);
+  
+  if (response.ok) {
+    return {
+      success: true,
+      data: response.data.map(s => Socio.fromApiResponse(s))
+    };
   }
+  
+  return { success: false, error: 'Error al cargar socios' };
+}
+
 
   async createSocio(socioData) {
     const token = await StorageService.getAuthToken();
