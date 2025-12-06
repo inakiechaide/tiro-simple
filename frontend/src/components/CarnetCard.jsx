@@ -1,6 +1,9 @@
 // src/components/CarnetCard.jsx
 import React, { useState } from 'react';
 import { Shield, QrCode, CreditCard, User, Calendar } from 'lucide-react';
+import QRCodeGenerator from '../components/QRCodeGenerator';
+
+
 
 /**
  * Componente para mostrar el carnet del socio
@@ -67,13 +70,8 @@ const CarnetCard = ({ socio }) => {
         {showQR && (
           <div className="mt-4 bg-white rounded-lg p-4">
             <div className="text-center">
-              <div className="w-48 h-48 mx-auto bg-white rounded-lg flex items-center justify-center mb-2 border-4 border-gray-200">
-                <div className="text-center p-4">
-                  <div className="text-6xl font-bold text-gray-800 mb-2">
-                    {socio.numeroSocio}
-                  </div>
-                  <QrCode className="w-16 h-16 mx-auto text-gray-400" />
-                </div>
+              <div className="w-48 h-48 mx-auto bg-white rounded-lg flex items-center justify-center mb-2">
+                <QRCodeGenerator value={`socio:${socio.numeroSocio}`} size={160} />
               </div>
               <p className="text-gray-600 text-sm font-semibold">
                 Código: {socio.numeroSocio}
