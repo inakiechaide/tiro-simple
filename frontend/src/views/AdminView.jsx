@@ -1,11 +1,11 @@
 // src/views/AdminView.jsx
 import React from 'react';
-import { Plus, Trash2, Users } from 'lucide-react';
+import { Plus, Trash2, Users, QrCode } from 'lucide-react';
 import Header from '../components/Header';
 import SocioForm from '../components/SocioForm';
 import { useSocios } from '../hooks/useSocios';
 
-const AdminView = ({ onLogout }) => {
+const AdminView = ({ onLogout, onNavigate }) => {
   const {
     socios,
     loading,
@@ -36,19 +36,28 @@ const AdminView = ({ onLogout }) => {
 
       <div className="max-w-6xl mx-auto p-4">
 
-        {/* Botón Nuevo Socio */}
-        <div className="mb-4 flex justify-between items-center">
-
-          <button
-            onClick={() => {
-              resetForm();
-              setShowForm(!showForm);
-            }}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center space-x-2"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Nuevo Socio</span>
-          </button>
+        {/* Botones de acción */}
+        <div className="mb-4 flex justify-between items-center space-x-4">
+          <div className="flex space-x-4">
+            <button
+              onClick={() => {
+                resetForm();
+                setShowForm(!showForm);
+              }}
+              className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center space-x-2"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Nuevo Socio</span>
+            </button>
+            
+            <button
+              onClick={() => onNavigate('scanner')}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center space-x-2"
+            >
+              <QrCode className="w-5 h-5" />
+              <span>Verificar Carnet</span>
+            </button>
+          </div>
 
           {/* 🔍 Campo de búsqueda */}
           <input

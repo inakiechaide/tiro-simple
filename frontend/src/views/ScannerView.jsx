@@ -58,11 +58,11 @@ const ScannerView = ({ onNavigate }) => {
       <header className="bg-blue-900 text-white p-4 shadow-lg">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
           <button 
-            onClick={() => onNavigate(VIEWS.CARNET)} 
+            onClick={() => onNavigate(VIEWS.ADMIN)} 
             className="flex items-center space-x-2"
           >
             <X className="w-6 h-6" />
-            <span>Volver</span>
+            <span>Volver al Panel</span>
           </button>
           <h1 className="font-bold">Verificar Carnet</h1>
           <div className="w-6"></div>

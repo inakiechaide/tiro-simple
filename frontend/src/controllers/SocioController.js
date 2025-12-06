@@ -22,8 +22,8 @@ class SocioController {
     return await this.socioService.verificarSocio(numeroSocio);
   }
 
-  async loadAllSocios() {
-    return await this.socioService.getAllSocios();
+  async loadAllSocios(searchTerm = '') {
+    return await this.socioService.getAllSocios(searchTerm);
   }
 
   async createSocio(formData) {

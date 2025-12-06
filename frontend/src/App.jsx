@@ -64,6 +64,7 @@ const App = () => {
       {view === VIEWS.ADMIN && (
         <AdminView 
           onLogout={handleLogout}
+          onNavigate={setView}
         />
       )}
     </div>
