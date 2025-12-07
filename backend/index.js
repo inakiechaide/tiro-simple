@@ -25,7 +25,7 @@ console.log('- PORT:', process.env.PORT || 3000);
 const app = express();
 const { Pool } = pg;
 
-// Conexión a la base de datos
+// Conexión a la base de datos CON CONFIGURACIÓN MEJORADA
 console.log('Intentando conectar a la base de datos con URL:', 
   process.env.DATABASE_URL ? 
   process.env.DATABASE_URL.replace(/:([^:]*?)@/, ':***@') : 
@@ -35,14 +35,50 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { 
     rejectUnauthorized: false 
-  }
+  },
+  // Configuraciones para mantener conexiones activas
+  max: 20, // Máximo de conexiones en el pool
+  idleTimeoutMillis: 30000, // Cerrar conexiones inactivas después de 30s
+  connectionTimeoutMillis: 2000, // Timeout para obtener una conexión
+  keepAlive: true, // Mantener conexiones vivas
+  keepAliveInitialDelayMillis: 10000 // Delay inicial para keep-alive
 });
 
 // Manejo de errores de conexión
 pool.on('error', (err) => {
   console.error('Error inesperado en el cliente de base de datos:', err);
-  process.exit(-1);
+  console.log('El pool intentará reconectar automáticamente...');
 });
+
+// Función helper para queries con retry automático
+async function queryWithRetry(text, params, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await pool.query(text, params);
+    } catch (error) {
+      console.error(`Intento ${i + 1} de ${maxRetries} falló:`, error.message);
+      
+      // Si es el último intento, lanzar el error
+      if (i === maxRetries - 1) throw error;
+      
+      // Esperar antes de reintentar (backoff exponencial)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+    }
+  }
+}
+
+// Función para mantener la conexión activa
+async function keepAlive() {
+  try {
+    await pool.query('SELECT 1');
+    console.log('✅ Keep-alive ping exitoso');
+  } catch (error) {
+    console.error('❌ Error en keep-alive:', error.message);
+  }
+}
+
+// Ejecutar keep-alive cada 5 minutos
+setInterval(keepAlive, 5 * 60 * 1000);
 
 // Probar la conexión a la base de datos
 async function testConnection() {
@@ -115,7 +151,7 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: 'DNI inválido' });
     }
     
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'SELECT * FROM socios WHERE dni = $1',
       [dniLimpio]
     );
@@ -174,7 +210,7 @@ app.post('/api/login-admin', async (req, res) => {
       return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
     }
     
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'SELECT * FROM administradores WHERE username = $1',
       [username]
     );
@@ -217,7 +253,7 @@ app.get('/api/carnet', auth, async (req, res) => {
       return res.status(403).json({ error: 'Acceso denegado' });
     }
 
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'SELECT * FROM socios WHERE id = $1',
       [req.user.id]
     );
@@ -254,7 +290,7 @@ app.post('/api/verificar', auth, async (req, res) => {
       return res.status(400).json({ error: 'Número de socio requerido' });
     }
     
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'SELECT * FROM socios WHERE numero_socio = $1',
       [numeroSocio]
     );
@@ -299,7 +335,7 @@ const esAdmin = (req, res, next) => {
 // Listar todos los socios (con filtro opcional)
 app.get('/api/admin/socios', auth, esAdmin, async (req, res) => {
   try {
-    const { search } = req.query; // <-- parámetro de búsqueda
+    const { search } = req.query;
 
     let query = `
       SELECT id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria, foto_url 
@@ -322,7 +358,7 @@ app.get('/api/admin/socios', auth, esAdmin, async (req, res) => {
 
     query += " ORDER BY apellido, nombre";
 
-    const result = await pool.query(query, params);
+    const result = await queryWithRetry(query, params);
     
     const socios = result.rows.map(s => ({
       ...s,
@@ -335,7 +371,6 @@ app.get('/api/admin/socios', auth, esAdmin, async (req, res) => {
     res.status(500).json({ error: 'Error en el servidor' });
   }
 });
-
 
 // Crear nuevo socio
 app.post('/api/admin/socios', auth, esAdmin, async (req, res) => {
@@ -362,13 +397,13 @@ app.post('/api/admin/socios', auth, esAdmin, async (req, res) => {
     }
     
     // Verificar que no exista el DNI
-    const existe = await pool.query('SELECT id FROM socios WHERE dni = $1', [dniLimpio]);
+    const existe = await queryWithRetry('SELECT id FROM socios WHERE dni = $1', [dniLimpio]);
     if (existe.rows.length > 0) {
       return res.status(400).json({ error: 'Ya existe un socio con ese DNI' });
     }
 
     // Verificar que no exista el número de socio
-    const existeNumero = await pool.query('SELECT id FROM socios WHERE numero_socio = $1', [numeroSocio]);
+    const existeNumero = await queryWithRetry('SELECT id FROM socios WHERE numero_socio = $1', [numeroSocio]);
     if (existeNumero.rows.length > 0) {
       return res.status(400).json({ error: 'Ya existe un socio con ese número' });
     }
@@ -377,7 +412,7 @@ app.post('/api/admin/socios', auth, esAdmin, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const fotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}+${encodeURIComponent(apellido)}&size=200&background=2c5282&color=fff`;
     
-    const result = await pool.query(
+    const result = await queryWithRetry(
       `INSERT INTO socios (dni, nombre, apellido, numero_socio, password_hash, fecha_vencimiento, categoria, foto_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria`,
       [dniLimpio, nombre, apellido, numeroSocio, passwordHash, fechaVencimiento, categoria || 'Titular', fotoUrl]
@@ -403,7 +438,7 @@ app.put('/api/admin/socios/:id', auth, esAdmin, async (req, res) => {
     }
 
     // Verificar que el socio existe
-    const existeSocio = await pool.query('SELECT id FROM socios WHERE id = $1', [id]);
+    const existeSocio = await queryWithRetry('SELECT id FROM socios WHERE id = $1', [id]);
     if (existeSocio.rows.length === 0) {
       return res.status(404).json({ error: 'Socio no encontrado' });
     }
@@ -428,7 +463,7 @@ app.put('/api/admin/socios/:id', auth, esAdmin, async (req, res) => {
       console.log('Actualizando socio SIN cambiar contraseña:', id);
     }
     
-    const result = await pool.query(query, params);
+    const result = await queryWithRetry(query, params);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Socio no encontrado' });
@@ -447,12 +482,12 @@ app.delete('/api/admin/socios/:id', auth, esAdmin, async (req, res) => {
     const { id } = req.params;
     
     // Verificar que el socio existe antes de eliminar
-    const existeSocio = await pool.query('SELECT id FROM socios WHERE id = $1', [id]);
+    const existeSocio = await queryWithRetry('SELECT id FROM socios WHERE id = $1', [id]);
     if (existeSocio.rows.length === 0) {
       return res.status(404).json({ error: 'Socio no encontrado' });
     }
 
-    await pool.query('DELETE FROM socios WHERE id = $1', [id]);
+    await queryWithRetry('DELETE FROM socios WHERE id = $1', [id]);
     console.log('Socio eliminado:', id);
     res.json({ mensaje: 'Socio eliminado exitosamente' });
   } catch (error) {
@@ -469,6 +504,8 @@ app.listen(PORT, () => {
 ║  🏛️  Backend Carnet Virtual       ║
 ║  ✅ Servidor corriendo en ${PORT}     ║
 ║  📍 http://localhost:${PORT}         ║
+║  🔄 Keep-alive: Activo (5min)     ║
+║  🔁 Auto-retry: 3 intentos        ║
 ╚════════════════════════════════════╝
   `);
 });
