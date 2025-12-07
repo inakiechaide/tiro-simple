@@ -18,7 +18,6 @@ class SocioController {
     if (!numeroSocio || !numeroSocio.trim()) {
       return { success: false, error: 'Número de socio inválido' };
     }
-
     return await this.socioService.verificarSocio(numeroSocio);
   }
 
@@ -26,7 +25,8 @@ class SocioController {
     return await this.socioService.getAllSocios(searchTerm);
   }
 
-  async createSocio(formData) {
+  // 📸 Agregado parámetro fotoFile
+  async createSocio(formData, fotoFile = null) {
     // Validaciones
     if (!formData.nombre || !formData.apellido || !formData.numeroSocio || !formData.fechaVencimiento) {
       return {
@@ -56,10 +56,12 @@ class SocioController {
       };
     }
 
-    return await this.socioService.createSocio(formData);
+    // 📸 Pasar el archivo de foto al servicio
+    return await this.socioService.createSocio(formData, fotoFile);
   }
 
-  async updateSocio(id, formData) {
+  // 📸 Agregado parámetro fotoFile
+  async updateSocio(id, formData, fotoFile = null) {
     // Validaciones
     if (!formData.nombre || !formData.apellido || !formData.numeroSocio || !formData.fechaVencimiento) {
       return {
@@ -81,7 +83,8 @@ class SocioController {
       delete dataToSend.password;
     }
 
-    return await this.socioService.updateSocio(id, dataToSend);
+    // 📸 Pasar el archivo de foto al servicio
+    return await this.socioService.updateSocio(id, dataToSend, fotoFile);
   }
 
   async deleteSocio(id) {

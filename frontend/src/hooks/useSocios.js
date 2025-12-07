@@ -12,13 +12,13 @@ export const useSocios = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(getEmptyForm());
-
-  // 🔍 Nuevo: estado de búsqueda
+  
+  // 🔍 Estado de búsqueda
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     loadSocios(search);
-  }, [search]); // 🔍 Se actualiza la lista cuando cambia el texto
+  }, [search]); // Se actualiza la lista cuando cambia el texto
 
   function getEmptyForm() {
     return {
@@ -28,7 +28,8 @@ export const useSocios = () => {
       numeroSocio: '',
       fechaVencimiento: '',
       categoria: CATEGORIAS.TITULAR,
-      password: '1234'
+      password: '1234',
+      foto: null // 📸 Agregado para preview de foto actual
     };
   }
 
@@ -46,13 +47,14 @@ export const useSocios = () => {
     }
   };
 
-  const saveSocio = async () => {
+  // 📸 Modificado para recibir el archivo de foto
+  const saveSocio = async (fotoFile = null) => {
     setLoading(true);
     try {
       const result = editingUser
-        ? await SocioController.updateSocio(editingUser, formData)
-        : await SocioController.createSocio(formData);
-
+        ? await SocioController.updateSocio(editingUser, formData, fotoFile)
+        : await SocioController.createSocio(formData, fotoFile);
+      
       if (result.success) {
         alert(result.mensaje || 'Operación exitosa');
         resetForm();
@@ -67,7 +69,7 @@ export const useSocios = () => {
 
   const deleteSocio = async (id) => {
     if (!window.confirm('¿Estás seguro de eliminar este socio?')) return;
-
+    
     setLoading(true);
     try {
       const result = await SocioController.deleteSocio(id);
@@ -90,7 +92,8 @@ export const useSocios = () => {
       numeroSocio: socio.numeroSocio,
       fechaVencimiento: socio.fechaVencimiento,
       categoria: socio.categoria,
-      password: ''
+      password: '',
+      foto: socio.foto || null // 📸 Incluir URL de foto actual
     });
     setEditingUser(socio.id);
     setShowForm(true);
@@ -110,12 +113,10 @@ export const useSocios = () => {
     formData,
     setFormData,
     setShowForm,
-    saveSocio,
+    saveSocio, // 📸 Ahora recibe fotoFile
     deleteSocio,
     editSocio,
     resetForm,
-
-    // 🔍 Nuevo: exportamos búsqueda
     search,
     setSearch
   };

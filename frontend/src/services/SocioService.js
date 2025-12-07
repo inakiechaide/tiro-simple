@@ -15,7 +15,6 @@ class SocioService {
     if (response.ok) {
       return { success: true, data: Socio.fromApiResponse(response.data) };
     }
-    
     return { success: false, error: 'Error al cargar carnet' };
   }
 
@@ -31,7 +30,6 @@ class SocioService {
         mensaje: response.data.mensaje
       };
     }
-    
     return { success: false, error: 'Error al verificar' };
   }
 
@@ -44,7 +42,7 @@ class SocioService {
       if (search && search.trim() !== '') {
         endpoint += `?search=${encodeURIComponent(search.trim())}`;
       }
-      
+
       const response = await ApiService.get(endpoint, token);
       
       if (response.ok) {
@@ -55,7 +53,6 @@ class SocioService {
             : []
         };
       }
-      
       return { 
         success: false, 
         error: response.data?.error || 'Error al cargar socios' 
@@ -69,25 +66,67 @@ class SocioService {
     }
   }
 
-  async createSocio(socioData) {
+  async createSocio(socioData, fotoFile = null) {
     const token = await StorageService.getAuthToken();
+    
+    // Si hay foto, usar FormData
+    if (fotoFile) {
+      const formData = new FormData();
+      formData.append('dni', socioData.dni);
+      formData.append('nombre', socioData.nombre);
+      formData.append('apellido', socioData.apellido);
+      formData.append('numeroSocio', socioData.numeroSocio);
+      formData.append('password', socioData.password);
+      formData.append('fechaVencimiento', socioData.fechaVencimiento);
+      formData.append('categoria', socioData.categoria);
+      formData.append('foto', fotoFile);
+      
+      const response = await ApiService.post('/admin/socios', formData, token);
+      
+      if (response.ok) {
+        return { success: true, mensaje: response.data.mensaje };
+      }
+      return { success: false, error: response.data.error };
+    }
+    
+    // Sin foto, enviar JSON normal
     const response = await ApiService.post('/admin/socios', socioData, token);
     
     if (response.ok) {
       return { success: true, mensaje: response.data.mensaje };
     }
-    
     return { success: false, error: response.data.error };
   }
 
-  async updateSocio(id, socioData) {
+  async updateSocio(id, socioData, fotoFile = null) {
     const token = await StorageService.getAuthToken();
+    
+    // Si hay foto, usar FormData
+    if (fotoFile) {
+      const formData = new FormData();
+      formData.append('nombre', socioData.nombre);
+      formData.append('apellido', socioData.apellido);
+      formData.append('fechaVencimiento', socioData.fechaVencimiento);
+      formData.append('categoria', socioData.categoria);
+      if (socioData.password) {
+        formData.append('password', socioData.password);
+      }
+      formData.append('foto', fotoFile);
+      
+      const response = await ApiService.put(`/admin/socios/${id}`, formData, token);
+      
+      if (response.ok) {
+        return { success: true, mensaje: response.data.mensaje };
+      }
+      return { success: false, error: response.data.error };
+    }
+    
+    // Sin foto, enviar JSON normal
     const response = await ApiService.put(`/admin/socios/${id}`, socioData, token);
     
     if (response.ok) {
       return { success: true, mensaje: response.data.mensaje };
     }
-    
     return { success: false, error: response.data.error };
   }
 
@@ -98,7 +137,6 @@ class SocioService {
     if (response.ok) {
       return { success: true };
     }
-    
     return { success: false, error: 'Error al eliminar' };
   }
 }

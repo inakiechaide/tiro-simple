@@ -6,6 +6,9 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { randomUUID } from 'crypto';
 
 // Configuración de rutas para ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -16,14 +19,39 @@ const envPath = join(__dirname, '.env');
 console.log('Cargando variables de entorno desde:', envPath);
 dotenv.config({ path: envPath });
 
+// Configurar Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
 // Verificar variables de entorno
 console.log('Variables de entorno cargadas:');
 console.log('- DATABASE_URL:', process.env.DATABASE_URL ? '***' : 'No definida');
 console.log('- JWT_SECRET:', process.env.JWT_SECRET ? '***' : 'No definida');
+console.log('- CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME ? '***' : 'No definida');
 console.log('- PORT:', process.env.PORT || 3000);
 
 const app = express();
 const { Pool } = pg;
+
+// Configurar multer para manejar archivos en memoria
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // Límite de 5MB
+  },
+  fileFilter: (req, file, cb) => {
+    // Aceptar solo imágenes
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten archivos de imagen'));
+    }
+  }
+});
 
 // Conexión a la base de datos CON CONFIGURACIÓN MEJORADA
 console.log('Intentando conectar a la base de datos con URL:', 
@@ -127,6 +155,39 @@ const auth = async (req, res, next) => {
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 };
+
+// Función helper para subir imagen a Cloudinary con ID seguro
+async function uploadToCloudinary(fileBuffer, nombreBase = null) {
+  // Generar un ID único e impredecible
+  const uuid = randomUUID(); // Ejemplo: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+  const timestamp = Date.now();
+  const publicId = nombreBase 
+    ? `${nombreBase}_${uuid}_${timestamp}` 
+    : `socio_${uuid}_${timestamp}`;
+  
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'carnets',
+        public_id: publicId, // 🔒 ID único e impredecible
+        transformation: [
+          { width: 400, height: 400, crop: 'fill', gravity: 'face' },
+          { quality: 'auto' }
+        ]
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result.secure_url);
+      }
+    );
+    uploadStream.end(fileBuffer);
+  });
+}
+
+// Función para generar avatar por defecto
+function generarAvatarUrl(nombre, apellido) {
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}+${encodeURIComponent(apellido)}&size=400&background=2c5282&color=fff`;
+}
 
 // ============ RUTAS ============
 
@@ -372,8 +433,8 @@ app.get('/api/admin/socios', auth, esAdmin, async (req, res) => {
   }
 });
 
-// Crear nuevo socio
-app.post('/api/admin/socios', auth, esAdmin, async (req, res) => {
+// Crear nuevo socio (CON OPCIÓN DE SUBIR FOTO)
+app.post('/api/admin/socios', auth, esAdmin, upload.single('foto'), async (req, res) => {
   try {
     const { dni, nombre, apellido, numeroSocio, password, fechaVencimiento, categoria } = req.body;
     
@@ -410,11 +471,27 @@ app.post('/api/admin/socios', auth, esAdmin, async (req, res) => {
     
     // Hashear contraseña
     const passwordHash = await bcrypt.hash(password, 10);
-    const fotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}+${encodeURIComponent(apellido)}&size=200&background=2c5282&color=fff`;
+    
+    // Procesar foto
+    let fotoUrl;
+    if (req.file) {
+      // Si se subió una foto, subirla a Cloudinary
+      try {
+       fotoUrl = await uploadToCloudinary(req.file.buffer);
+        console.log('Foto subida a Cloudinary:', fotoUrl);
+      } catch (error) {
+        console.error('Error al subir foto a Cloudinary:', error);
+        // Si falla, usar avatar por defecto
+        fotoUrl = generarAvatarUrl(nombre, apellido);
+      }
+    } else {
+      // Si no se subió foto, usar avatar por defecto
+      fotoUrl = generarAvatarUrl(nombre, apellido);
+    }
     
     const result = await queryWithRetry(
       `INSERT INTO socios (dni, nombre, apellido, numero_socio, password_hash, fecha_vencimiento, categoria, foto_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria, foto_url`,
       [dniLimpio, nombre, apellido, numeroSocio, passwordHash, fechaVencimiento, categoria || 'Titular', fotoUrl]
     );
     
@@ -426,8 +503,8 @@ app.post('/api/admin/socios', auth, esAdmin, async (req, res) => {
   }
 });
 
-// Actualizar socio
-app.put('/api/admin/socios/:id', auth, esAdmin, async (req, res) => {
+// Actualizar socio (CON OPCIÓN DE ACTUALIZAR FOTO)
+app.put('/api/admin/socios/:id', auth, esAdmin, upload.single('foto'), async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre, apellido, fechaVencimiento, categoria, password } = req.body;
@@ -438,9 +515,23 @@ app.put('/api/admin/socios/:id', auth, esAdmin, async (req, res) => {
     }
 
     // Verificar que el socio existe
-    const existeSocio = await queryWithRetry('SELECT id FROM socios WHERE id = $1', [id]);
+    const existeSocio = await queryWithRetry('SELECT * FROM socios WHERE id = $1', [id]);
     if (existeSocio.rows.length === 0) {
       return res.status(404).json({ error: 'Socio no encontrado' });
+    }
+
+    const socioActual = existeSocio.rows[0];
+    
+    // Procesar foto si se subió una nueva
+    let fotoUrl = socioActual.foto_url; // Mantener la foto actual por defecto
+    if (req.file) {
+      try {
+        fotoUrl = await uploadToCloudinary(req.file.buffer);
+        console.log('Nueva foto subida a Cloudinary:', fotoUrl);
+      } catch (error) {
+        console.error('Error al subir nueva foto a Cloudinary:', error);
+        // Si falla, mantener la foto anterior
+      }
     }
     
     let query, params;
@@ -453,13 +544,13 @@ app.put('/api/admin/socios/:id', auth, esAdmin, async (req, res) => {
       }
 
       const passwordHash = await bcrypt.hash(password, 10);
-      query = 'UPDATE socios SET nombre = $1, apellido = $2, fecha_vencimiento = $3, categoria = $4, password_hash = $5 WHERE id = $6 RETURNING id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria';
-      params = [nombre, apellido, fechaVencimiento, categoria || 'Titular', passwordHash, id];
+      query = 'UPDATE socios SET nombre = $1, apellido = $2, fecha_vencimiento = $3, categoria = $4, password_hash = $5, foto_url = $6 WHERE id = $7 RETURNING id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria, foto_url';
+      params = [nombre, apellido, fechaVencimiento, categoria || 'Titular', passwordHash, fotoUrl, id];
       console.log('Actualizando socio CON nueva contraseña:', id);
     } else {
       // Sin cambio de contraseña
-      query = 'UPDATE socios SET nombre = $1, apellido = $2, fecha_vencimiento = $3, categoria = $4 WHERE id = $5 RETURNING id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria';
-      params = [nombre, apellido, fechaVencimiento, categoria || 'Titular', id];
+      query = 'UPDATE socios SET nombre = $1, apellido = $2, fecha_vencimiento = $3, categoria = $4, foto_url = $5 WHERE id = $6 RETURNING id, dni, nombre, apellido, numero_socio, fecha_vencimiento, categoria, foto_url';
+      params = [nombre, apellido, fechaVencimiento, categoria || 'Titular', fotoUrl, id];
       console.log('Actualizando socio SIN cambiar contraseña:', id);
     }
     
@@ -506,6 +597,7 @@ app.listen(PORT, () => {
 ║  📍 http://localhost:${PORT}         ║
 ║  🔄 Keep-alive: Activo (5min)     ║
 ║  🔁 Auto-retry: 3 intentos        ║
+║  📸 Subida de fotos: Cloudinary   ║
 ╚════════════════════════════════════╝
   `);
 });

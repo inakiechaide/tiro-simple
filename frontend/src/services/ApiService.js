@@ -13,12 +13,16 @@ class ApiService {
   async request(endpoint, options = {}) {
     try {
       const url = `${this.baseURL}${endpoint}`;
+      
+      // Si no es FormData, agregar Content-Type: application/json
+      const headers = { ...options.headers };
+      if (!(options.body instanceof FormData)) {
+        headers['Content-Type'] = 'application/json';
+      }
+      
       const response = await fetch(url, {
         ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        }
+        headers
       });
 
       const data = await response.json();
@@ -48,7 +52,7 @@ class ApiService {
     return this.request(endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body)
+      body: body instanceof FormData ? body : JSON.stringify(body)
     });
   }
 
@@ -57,7 +61,7 @@ class ApiService {
     return this.request(endpoint, {
       method: 'PUT',
       headers,
-      body: JSON.stringify(body)
+      body: body instanceof FormData ? body : JSON.stringify(body)
     });
   }
 
