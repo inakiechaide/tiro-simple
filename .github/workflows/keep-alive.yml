@@ -1,0 +1,32 @@
+# Mantiene activo el proyecto de Supabase de Tiro Federal (plan gratuito).
+# Supabase pausa los proyectos free tras 7 dias sin actividad de base de datos.
+# Este workflow hace una consulta real a Postgres lunes y jueves (margen amplio).
+# La clave anon va en el secret SUPABASE_ANON_KEY (repo publico).
+# Tambien se puede correr a mano desde la pestania "Actions".
+name: keep-supabase-alive
+
+on:
+  schedule:
+    - cron: '0 12 * * 1,4'   # Lunes y jueves 12:00 UTC (9:00 AR)
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consultar Supabase para evitar la pausa por inactividad
+        env:
+          SUPABASE_URL: https://tbychrvkjwnuyxmzesco.supabase.co
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "❌ Falta el secret SUPABASE_ANON_KEY"; exit 1
+          fi
+          echo "Ping a Supabase (tiro) $(date -u)"
+          code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/keep_alive?select=last_ping&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          echo "HTTP ${code}"; cat /tmp/resp.txt; echo ""
+          if [ "${code}" != "200" ]; then echo "❌ Ping fallo (esperaba 200)"; exit 1; fi
+          echo "✅ tiro activo"
